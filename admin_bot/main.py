@@ -3,6 +3,7 @@ import logging
 import asyncio
 from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
+from aiogram.client.default import DefaultBotProperties
 
 from admin_bot.handlers import dashboard, users, broadcast
 
@@ -11,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 ADMIN_BOT_TOKEN = os.getenv("ADMIN_BOT_TOKEN", "")
 
-bot = Bot(token=ADMIN_BOT_TOKEN, parse_mode=ParseMode.HTML)
+bot = Bot(token=ADMIN_BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
 dp.include_router(dashboard.router)
@@ -26,3 +27,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+

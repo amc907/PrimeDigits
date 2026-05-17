@@ -77,6 +77,18 @@ async def process_payment(callback: CallbackQuery):
             await callback.answer("User not found or banned.", show_alert=True)
             return
 
+        numbers = await crud.get_active_numbers_for_user(db, user.id)
+        limit = user.number_limit or 3
+        if len(numbers) >= limit:
+            await callback.message.edit_text(
+                f"⚠️ You've reached your limit of {limit} numbers. "
+                f"Delete an existing number or contact support to increase your limit.",
+                reply_markup=main_menu(),
+                parse_mode="HTML"
+            )
+            await callback.answer()
+            return
+
         # Mock Flutterwave payment
         tx = await crud.create_transaction(db, user.id, float(price), f"number_{country}_{months}", flutterwave_ref=f"MOCK_{uuid.uuid4().hex[:12]}")
         await crud.update_transaction_status(db, tx.id, "completed")

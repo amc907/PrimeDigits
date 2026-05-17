@@ -1,5 +1,7 @@
+from datetime import datetime
 from aiogram import Router, F
-from aiogram.types import CallbackQuery
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.connection import AsyncSessionLocal
@@ -161,6 +163,40 @@ async def process_renewal_payment(callback: CallbackQuery):
     await callback.answer()
 
 
+@router.callback_query(F.data == "menu_history")
+async def menu_history(callback: CallbackQuery):
+    async with AsyncSessionLocal() as db:
+        user = await crud.get_user_by_telegram_id(db, str(callback.from_user.id))
+        if not user:
+            await callback.answer("Please start the bot first.", show_alert=True)
+            return
+
+        numbers = await crud.get_active_numbers_for_user(db, user.id)
+
+        if not numbers:
+            await callback.message.edit_text(
+                "📭 You don't have any active numbers yet.\n\nTap 🛒 Buy Number to get started!",
+                reply_markup=main_menu(),
+                parse_mode="HTML"
+            )
+            await callback.answer()
+            return
+
+        text = "📜 <b>Select a number to view SMS History:</b>\n\n"
+        kb = []
+        for n in numbers:
+            text += f"<code>{n.phone_number}</code> — {n.country}\n"
+            kb.append([InlineKeyboardButton(text=n.phone_number, callback_data=f"hist_{n.id}")])
+
+        kb.append([InlineKeyboardButton(text="🔙 Main Menu", callback_data="menu_back")])
+        await callback.message.edit_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=kb),
+            parse_mode="HTML"
+        )
+        await callback.answer()
+
+
 @router.callback_query(F.data.startswith("hist_"))
 async def view_history(callback: CallbackQuery):
     number_id = callback.data.split("_", 1)[1]
@@ -192,3 +228,75 @@ async def view_history(callback: CallbackQuery):
         parse_mode="HTML"
     )
     await callback.answer()
+
+
+@router.callback_query(F.data.startswith("del_"))
+async def delete_number_confirm(callback: CallbackQuery):
+    number_id = callback.data.split("_", 1)[1]
+    async with AsyncSessionLocal() as db:
+        number = await crud.get_number_by_id(db, number_id)
+
+    if not number:
+        await callback.answer("Number not found.", show_alert=True)
+        return
+
+    text = (
+        f"⚠️ Are you sure you want to delete <code>{number.phone_number}</code>?\n\n"
+        f"This is permanent and NO REFUND will be given."
+    )
+    kb = [
+        [InlineKeyboardButton(text="Yes, Delete ✅", callback_data=f"delconf_{number_id}")],
+        [InlineKeyboardButton(text="Cancel ❌", callback_data=f"numact_{number_id}")],
+    ]
+    await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=kb), parse_mode="HTML")
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("delconf_"))
+async def delete_number_confirmed(callback: CallbackQuery):
+    number_id = callback.data.split("_", 1)[1]
+    async with AsyncSessionLocal() as db:
+        number = await crud.get_number_by_id(db, number_id)
+        if not number:
+            await callback.answer("Number not found.", show_alert=True)
+            return
+
+        # Release from provider
+        if number.provider == "twilio":
+            provider = TwilioProvider()
+        else:
+            provider = TelnyxProvider()
+
+        if number.number_sid and not number.number_sid.startswith("MOCK_"):
+            await provider.release_number(number.number_sid)
+
+        # Log deletion
+        await crud.log_number_deletion(
+            db,
+            number_id=number.id,
+            phone_number=number.phone_number,
+            deleted_by_telegram_id=str(callback.from_user.id)
+        )
+
+        # Delete number, logs, credits
+        await crud.delete_number_and_logs(db, number.id)
+
+    await callback.message.edit_text(
+        f"🗑 <b>Number Deleted</b>\n\n"
+        f"<code>{number.phone_number}</code> has been permanently deleted.\n\n"
+        f"You can now purchase a new number if you wish.",
+        reply_markup=main_menu(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+    # Notify admins
+    from utils.notifications import notify_admins
+    admin_name = callback.from_user.full_name or callback.from_user.username or f"ID {callback.from_user.id}"
+    await notify_admins(
+        f"🗑 <b>Number Deleted</b>\n\n"
+        f"📱 <code>{number.phone_number}</code>\n"
+        f"👤 By: {admin_name} (<code>{callback.from_user.id}</code>)\n"
+        f"🕒 {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"
+    )
+

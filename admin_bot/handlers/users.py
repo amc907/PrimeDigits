@@ -2,6 +2,7 @@ import os
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import Command
+from sqlalchemy.exc import IntegrityError
 
 from database.connection import AsyncSessionLocal
 from database import crud
@@ -172,8 +173,46 @@ async def cmd_add_agent(message: Message):
     agent_tg_id = args[1]
     username = args[2] if len(args) > 2 else None
     async with AsyncSessionLocal() as db:
-        await crud.add_support_agent(db, agent_tg_id, username, can_replace=True)
-    await message.answer(f"✅ Support agent <code>{agent_tg_id}</code> added.", parse_mode="HTML")
+        try:
+            await crud.add_support_agent(db, agent_tg_id, username, can_replace=True)
+            await message.answer(f"✅ Support agent <code>{agent_tg_id}</code> added.", parse_mode="HTML")
+        except IntegrityError:
+            await db.rollback()
+            await message.answer(f"⚠️ Agent <code>{agent_tg_id}</code> already exists.", parse_mode="HTML")
+        except Exception as e:
+            await db.rollback()
+            await message.answer(f"❌ Error adding agent: {e}", parse_mode="HTML")
+
+
+@router.message(Command("setlimit"))
+async def cmd_set_limit(message: Message):
+    if str(message.from_user.id) not in ADMIN_IDS:
+        await message.answer("🚫 Unauthorized.", parse_mode="HTML")
+        return
+
+    args = message.text.split()
+    if len(args) < 3:
+        await message.answer("Usage: /setlimit <telegram_id> <new_limit>", parse_mode="HTML")
+        return
+
+    target_id = args[1]
+    try:
+        new_limit = int(args[2])
+    except ValueError:
+        await message.answer("❌ Limit must be a number.", parse_mode="HTML")
+        return
+
+    async with AsyncSessionLocal() as db:
+        user = await crud.get_user_by_telegram_id(db, target_id)
+        if not user:
+            await message.answer("❌ User not found.", parse_mode="HTML")
+            return
+        await crud.set_user_number_limit(db, user.id, new_limit)
+
+    await message.answer(
+        f"✅ User <code>{target_id}</code> number limit set to <b>{new_limit}</b>.",
+        parse_mode="HTML"
+    )
 
 
 @router.message(Command("removeagent"))

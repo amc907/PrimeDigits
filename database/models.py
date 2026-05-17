@@ -21,6 +21,7 @@ class User(Base):
     username = Column(String, nullable=True)
     joined_at = Column(DateTime, default=datetime.utcnow)
     is_banned = Column(Boolean, default=False)
+    number_limit = Column(Integer, default=3)
     referral_code = Column(String, unique=True, nullable=False, default=lambda: str(uuid.uuid4())[:8].upper())
     referred_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
 
@@ -129,3 +130,22 @@ class Announcement(Base):
     message = Column(Text, nullable=False)
     sent_at = Column(DateTime, default=datetime.utcnow)
     sent_by = Column(String, nullable=False)
+
+
+class SupportMessage(Base):
+    __tablename__ = "support_messages"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    customer_telegram_id = Column(String, nullable=False, index=True)
+    group_message_id = Column(Integer, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class DeletionLog(Base):
+    __tablename__ = "deletion_logs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    number_id = Column(UUID(as_uuid=True), nullable=True)
+    phone_number = Column(String, nullable=False)
+    deleted_by_telegram_id = Column(String, nullable=False)
+    deleted_at = Column(DateTime, default=datetime.utcnow)

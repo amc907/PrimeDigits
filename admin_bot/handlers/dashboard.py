@@ -33,6 +33,7 @@ async def cmd_start(message: Message):
         "/unban — Unban a user\n"
         "/addagent — Add support agent\n"
         "/removeagent — Remove support agent\n"
+        "/setlimit — Set number limit for user\n"
         "/addcredits — Add SMS credits to user\n"
     )
     await message.answer(text, parse_mode="HTML")

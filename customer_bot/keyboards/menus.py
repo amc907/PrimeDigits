@@ -52,6 +52,7 @@ def number_actions_menu(number_id: str) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="🔄 Renew", callback_data=f"renew_{number_id}")],
         [InlineKeyboardButton(text="📜 SMS History", callback_data=f"hist_{number_id}")],
         [InlineKeyboardButton(text="💳 Top Up Credits", callback_data=f"topup_{number_id}")],
+        [InlineKeyboardButton(text="🗑 Delete Number", callback_data=f"del_{number_id}")],
         [InlineKeyboardButton(text="🔙 Back", callback_data="menu_numbers")],
     ])
 

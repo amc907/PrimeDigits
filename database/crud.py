@@ -5,7 +5,8 @@ from sqlalchemy import select, func, and_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models import (
-    User, Number, SmsCredit, Transaction, SmsLog, SupportAgent, Referral, Announcement
+    User, Number, SmsCredit, Transaction, SmsLog, SupportAgent, Referral, Announcement,
+    SupportMessage, DeletionLog
 )
 
 
@@ -63,6 +64,18 @@ async def get_user_count(db: AsyncSession) -> int:
     return result.scalar() or 0
 
 
+async def get_active_number_count_for_user(db: AsyncSession, user_id: uuid.UUID) -> int:
+    result = await db.execute(
+        select(func.count(Number.id)).where(and_(Number.user_id == user_id, Number.is_active == True))
+    )
+    return result.scalar() or 0
+
+
+async def set_user_number_limit(db: AsyncSession, user_id: uuid.UUID, limit: int):
+    await db.execute(update(User).where(User.id == user_id).values(number_limit=limit))
+    await db.commit()
+
+
 # ------------------ Numbers ------------------
 
 async def create_number(db: AsyncSession, user_id: uuid.UUID, phone_number: str, number_sid: str, provider: str, country: str, duration_months: int) -> Number:
@@ -114,6 +127,24 @@ async def release_number(db: AsyncSession, number_id: uuid.UUID):
         number.is_active = False
         number.released_at = datetime.utcnow()
         await db.commit()
+
+
+async def delete_number_and_logs(db: AsyncSession, number_id: uuid.UUID):
+    from sqlalchemy import delete
+    await db.execute(delete(SmsLog).where(SmsLog.number_id == number_id))
+    await db.execute(delete(SmsCredit).where(SmsCredit.number_id == number_id))
+    await db.execute(delete(Number).where(Number.id == number_id))
+    await db.commit()
+
+
+async def log_number_deletion(db: AsyncSession, number_id: uuid.UUID, phone_number: str, deleted_by_telegram_id: str):
+    log = DeletionLog(
+        number_id=number_id,
+        phone_number=phone_number,
+        deleted_by_telegram_id=deleted_by_telegram_id
+    )
+    db.add(log)
+    await db.commit()
 
 
 async def replace_number(db: AsyncSession, number_id: uuid.UUID, new_phone: str, new_sid: str, provider: str):
@@ -287,6 +318,24 @@ async def remove_support_agent(db: AsyncSession, telegram_id: str):
 async def get_all_support_agents(db: AsyncSession) -> List[SupportAgent]:
     result = await db.execute(select(SupportAgent))
     return result.scalars().all()
+
+
+# ------------------ Support Messages ------------------
+
+async def add_support_message_mapping(db: AsyncSession, customer_telegram_id: str, group_message_id: int):
+    mapping = SupportMessage(
+        customer_telegram_id=str(customer_telegram_id),
+        group_message_id=group_message_id
+    )
+    db.add(mapping)
+    await db.commit()
+
+
+async def get_support_mapping_by_group_message_id(db: AsyncSession, group_message_id: int) -> Optional[SupportMessage]:
+    result = await db.execute(
+        select(SupportMessage).where(SupportMessage.group_message_id == group_message_id)
+    )
+    return result.scalar_one_or_none()
 
 
 # ------------------ Referrals ------------------

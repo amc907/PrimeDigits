@@ -6,7 +6,7 @@ from customer_bot.keyboards.menus import support_menu, main_menu
 
 router = Router()
 
-ADMIN_BOT_LINK = os.getenv("ADMIN_BOT_LINK", "https://t.me/PrimeDigitsSupportBot")
+SUPPORT_BOT_LINK = os.getenv("SUPPORT_BOT_LINK") or os.getenv("ADMIN_BOT_LINK", "https://t.me/PrimeDigitsSupportBot")
 
 
 @router.callback_query(F.data == "menu_support")
@@ -19,7 +19,7 @@ async def menu_support(callback: CallbackQuery):
         "• Payment issues\n"
         "• Account questions\n\n"
         "We're here to help!",
-        reply_markup=support_menu(ADMIN_BOT_LINK),
+        reply_markup=support_menu(SUPPORT_BOT_LINK),
         parse_mode="HTML"
     )
     await callback.answer()

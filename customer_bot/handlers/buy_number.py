@@ -1,0 +1,129 @@
+import uuid
+import os
+from aiogram import Router, F
+from aiogram.types import CallbackQuery
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from database.connection import AsyncSessionLocal
+from database import crud
+from customer_bot.keyboards.menus import country_menu, duration_menu, confirm_payment_menu, main_menu
+from providers.twilio_provider import TwilioProvider
+from providers.telnyx_provider import TelnyxProvider
+
+router = Router()
+WEBHOOK_BASE_URL = os.getenv("WEBHOOK_BASE_URL", "")
+
+PRICING = {
+    1: 3000,
+    3: 8000,
+    6: 14000,
+    12: 25000,
+}
+
+
+@router.callback_query(F.data == "menu_buy")
+async def menu_buy(callback: CallbackQuery):
+    await callback.message.edit_text(
+        "🌍 Choose a country for your virtual number:",
+        reply_markup=country_menu(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("country_"))
+async def choose_country(callback: CallbackQuery):
+    country = callback.data.split("_")[1]
+    await callback.message.edit_text(
+        f"⏳ Choose subscription duration for your {'🇺🇸 US' if country=='us' else '🇨🇦 Canada' if country=='ca' else '🇬🇧 UK'} number:",
+        reply_markup=duration_menu(country),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("dur_"))
+async def choose_duration(callback: CallbackQuery):
+    parts = callback.data.split("_", 2)
+    _, country, months = parts
+    months = int(months)
+    price = PRICING[months]
+    text = (
+        f"📋 <b>Order Summary</b>\n\n"
+        f"🌍 Country: {'🇺🇸 US' if country=='us' else '🇨🇦 Canada' if country=='ca' else '🇬🇧 UK'}\n"
+        f"⏳ Duration: {months} month{'s' if months>1 else ''}\n"
+        f"💰 Price: ₦{price:,}\n"
+        f"📩 SMS Credits: 15 included\n\n"
+        f"Proceed to payment?"
+    )
+    await callback.message.edit_text(
+        text,
+        reply_markup=confirm_payment_menu(f"{country}_{months}_{price}"),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("pay_"))
+async def process_payment(callback: CallbackQuery):
+    parts = callback.data.split("_", 3)
+    _, country, months, price = parts
+    months = int(months)
+    price = int(price)
+
+    async with AsyncSessionLocal() as db:
+        user = await crud.get_user_by_telegram_id(db, str(callback.from_user.id))
+        if not user or user.is_banned:
+            await callback.answer("User not found or banned.", show_alert=True)
+            return
+
+        # Mock Flutterwave payment
+        tx = await crud.create_transaction(db, user.id, float(price), f"number_{country}_{months}", flutterwave_ref=f"MOCK_{uuid.uuid4().hex[:12]}")
+        await crud.update_transaction_status(db, tx.id, "completed")
+
+        # Purchase number
+        if country == "uk":
+            provider = TelnyxProvider()
+        else:
+            provider = TwilioProvider()
+
+        numbers = await provider.search_numbers(country)
+        if not numbers:
+            await callback.message.edit_text(
+                "❌ No numbers available right now. Please try again later or contact support.",
+                reply_markup=main_menu(),
+                parse_mode="HTML"
+            )
+            await callback.answer()
+            return
+
+        chosen = numbers[0]
+        result = await provider.purchase_number(chosen["phone_number"])
+
+        # Configure webhook
+        webhook_url = (
+            f"{WEBHOOK_BASE_URL}/webhooks/telnyx/sms"
+            if country == "uk"
+            else f"{WEBHOOK_BASE_URL}/webhooks/twilio/sms"
+        )
+        if WEBHOOK_BASE_URL and not result["sid"].startswith("MOCK_"):
+            await provider.configure_webhook(result["sid"], webhook_url)
+
+        number = await crud.create_number(
+            db, user.id, result["phone_number"], result["sid"],
+            "telnyx" if country == "uk" else "twilio",
+            country.upper(), months
+        )
+        await crud.get_or_create_sms_credit(db, user.id, number.id, initial=15)
+
+        await callback.message.edit_text(
+            f"🎉 <b>Payment Successful!</b>\n\n"
+            f"📱 <b>Your Number:</b> <code>{result['phone_number']}</code>\n"
+            f"🌍 <b>Country:</b> {country.upper()}\n"
+            f"⏳ <b>Expires:</b> {number.expires_at.strftime('%Y-%m-%d')}\n"
+            f"💳 <b>SMS Credits:</b> 15\n\n"
+            f"Use this number for verifications. You will receive SMS directly here!",
+            reply_markup=main_menu(),
+            parse_mode="HTML"
+        )
+        await callback.answer()

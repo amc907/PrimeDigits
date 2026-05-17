@@ -1,6 +1,7 @@
 import os
 from aiogram import Bot
 from aiogram.enums import ParseMode
+from aiogram.client.default import DefaultBotProperties
 
 CUSTOMER_BOT_TOKEN = os.getenv("CUSTOMER_BOT_TOKEN", "")
 ADMIN_BOT_TOKEN = os.getenv("ADMIN_BOT_TOKEN", "")
@@ -12,14 +13,14 @@ _admin_bot: Bot = None
 def get_customer_bot() -> Bot:
     global _customer_bot
     if _customer_bot is None:
-        _customer_bot = Bot(token=CUSTOMER_BOT_TOKEN, parse_mode=ParseMode.HTML)
+        _customer_bot = Bot(token=CUSTOMER_BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     return _customer_bot
 
 
 def get_admin_bot() -> Bot:
     global _admin_bot
     if _admin_bot is None:
-        _admin_bot = Bot(token=ADMIN_BOT_TOKEN, parse_mode=ParseMode.HTML)
+        _admin_bot = Bot(token=ADMIN_BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     return _admin_bot
 
 
@@ -62,3 +63,5 @@ async def send_low_credit_warning(telegram_id: str, phone_number: str, remaining
         f"You are running low on SMS credits. Top up now to avoid missing important verification codes."
     )
     await notify_user(telegram_id, msg)
+
+

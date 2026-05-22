@@ -1,5 +1,6 @@
 import uuid
 import os
+import logging
 from aiogram import Router, F
 from aiogram.types import CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,13 +12,13 @@ from providers.twilio_provider import TwilioProvider
 from providers.telnyx_provider import TelnyxProvider
 
 router = Router()
+logger = logging.getLogger(__name__)
 WEBHOOK_BASE_URL = os.getenv("WEBHOOK_BASE_URL", "")
 
 PRICING = {
-    1: 3000,
-    3: 8000,
-    6: 14000,
-    12: 25000,
+    "us": {1: 3000, 3: 8000, 6: 14000, 12: 25000},
+    "ca": {1: 3000, 3: 8000, 6: 14000, 12: 25000},
+    "uk": {1: 4500, 3: 12000, 6: 20000, 12: 35000},
 }
 
 
@@ -47,7 +48,7 @@ async def choose_duration(callback: CallbackQuery):
     parts = callback.data.split("_", 2)
     _, country, months = parts
     months = int(months)
-    price = PRICING[months]
+    price = PRICING.get(country, PRICING["us"])[months]
     text = (
         f"📋 <b>Order Summary</b>\n\n"
         f"🌍 Country: {'🇺🇸 US' if country=='us' else '🇨🇦 Canada' if country=='ca' else '🇬🇧 UK'}\n"
@@ -96,10 +97,25 @@ async def process_payment(callback: CallbackQuery):
         # Purchase number
         if country == "uk":
             provider = TelnyxProvider()
+            provider_name = "telnyx"
+            numbers = await provider.search_numbers(country)
         else:
+            # Try Twilio first for US/Canada
             provider = TwilioProvider()
+            provider_name = "twilio"
+            numbers = await provider.search_numbers(country)
+            # Fallback to Telnyx if Twilio unavailable
+            if not numbers:
+                logger.info(
+                    "Twilio unavailable, "
+                    "falling back to Telnyx"
+                )
+                provider = TelnyxProvider()
+                provider_name = "telnyx"
+                numbers = await provider.search_numbers(
+                    country
+                )
 
-        numbers = await provider.search_numbers(country)
         if not numbers:
             await callback.message.edit_text(
                 "❌ No numbers available right now. Please try again later or contact support.",
@@ -123,7 +139,7 @@ async def process_payment(callback: CallbackQuery):
 
         number = await crud.create_number(
             db, user.id, result["phone_number"], result["sid"],
-            "telnyx" if country == "uk" else "twilio",
+            provider_name,
             country.upper(), months
         )
         await crud.get_or_create_sms_credit(db, user.id, number.id, initial=15)

@@ -7,6 +7,7 @@ def main_menu() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="📱 My Numbers", callback_data="menu_numbers")],
         [InlineKeyboardButton(text="💳 Buy SMS Credits", callback_data="menu_credits")],
         [InlineKeyboardButton(text="📜 SMS History", callback_data="menu_history")],
+        [InlineKeyboardButton(text="📖 How It Works", callback_data="menu_howto")],
         [InlineKeyboardButton(text="🤝 Refer & Earn", callback_data="menu_referral")],
         [InlineKeyboardButton(text="🆘 Support", callback_data="menu_support")],
     ])
@@ -22,12 +23,32 @@ def country_menu() -> InlineKeyboardMarkup:
 
 
 def duration_menu(country: str) -> InlineKeyboardMarkup:
+    prices = {
+        "us": {1: 3000, 3: 8000, 6: 14000, 12: 25000},
+        "ca": {1: 3000, 3: 8000, 6: 14000, 12: 25000},
+        "uk": {1: 4500, 3: 12000, 6: 20000, 12: 35000},
+    }
+    p = prices.get(country, prices["us"])
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="1 Month — ₦3,000", callback_data=f"dur_{country}_1")],
-        [InlineKeyboardButton(text="3 Months — ₦8,000", callback_data=f"dur_{country}_3")],
-        [InlineKeyboardButton(text="6 Months — ₦14,000", callback_data=f"dur_{country}_6")],
-        [InlineKeyboardButton(text="1 Year — ₦25,000", callback_data=f"dur_{country}_12")],
-        [InlineKeyboardButton(text="🔙 Back", callback_data="menu_buy")],
+        [InlineKeyboardButton(
+            text=f"1 Month — ₦{p[1]:,}",
+            callback_data=f"dur_{country}_1"
+        )],
+        [InlineKeyboardButton(
+            text=f"3 Months — ₦{p[3]:,}",
+            callback_data=f"dur_{country}_3"
+        )],
+        [InlineKeyboardButton(
+            text=f"6 Months — ₦{p[6]:,}",
+            callback_data=f"dur_{country}_6"
+        )],
+        [InlineKeyboardButton(
+            text=f"1 Year — ₦{p[12]:,}",
+            callback_data=f"dur_{country}_12"
+        )],
+        [InlineKeyboardButton(
+            text="🔙 Back",
+            callback_data="menu_buy")],
     ])
 
 

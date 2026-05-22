@@ -25,6 +25,11 @@ class TelnyxProvider(BaseProvider):
     async def search_numbers(
         self, country: str
     ) -> list:
+        logger.info(
+            f"Telnyx search called. "
+            f"API key set: {bool(TELNYX_API_KEY)}, "
+            f"Country: {country}"
+        )
         if not self.available:
             return self._mock_numbers(country)
         country_code = (
@@ -56,7 +61,8 @@ class TelnyxProvider(BaseProvider):
                 else self._mock_numbers(country)
         except Exception as e:
             logger.error(
-                f"Telnyx search error: {e}"
+                f"Telnyx search_numbers FULL ERROR: "
+                f"{type(e).__name__}: {e}"
             )
             return self._mock_numbers(country)
 
@@ -100,7 +106,8 @@ class TelnyxProvider(BaseProvider):
             }
         except Exception as e:
             logger.error(
-                f"Telnyx purchase error: {e}"
+                f"Telnyx purchase_number FULL ERROR: "
+                f"{type(e).__name__}: {e}"
             )
             return {
                 "sid": f"MOCK_{phone_number}",

@@ -17,6 +17,16 @@ async def get_user_by_telegram_id(db: AsyncSession, telegram_id: str) -> Optiona
     return result.scalar_one_or_none()
 
 
+async def get_user_by_email(db: AsyncSession, email: str) -> Optional[User]:
+    result = await db.execute(select(User).where(User.email == email.lower().strip()))
+    return result.scalar_one_or_none()
+
+
+async def get_user_by_supabase_id(db: AsyncSession, supabase_id: str) -> Optional[User]:
+    result = await db.execute(select(User).where(User.supabase_id == supabase_id))
+    return result.scalar_one_or_none()
+
+
 async def create_user(db: AsyncSession, telegram_id: str, username: Optional[str] = None, referred_by_code: Optional[str] = None):
     referrer = None
     if referred_by_code:
@@ -37,6 +47,18 @@ async def create_user(db: AsyncSession, telegram_id: str, username: Optional[str
         db.add(referral)
         await db.commit()
 
+    return user
+
+
+async def create_web_user(db: AsyncSession, email: str, full_name: Optional[str] = None, supabase_id: Optional[str] = None) -> User:
+    user = User(
+        email=email.lower().strip(),
+        username=full_name,
+        supabase_id=supabase_id
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
     return user
 
 
@@ -228,13 +250,14 @@ async def get_sms_credit_for_number(db: AsyncSession, user_id: uuid.UUID, number
 
 # ------------------ Transactions ------------------
 
-async def create_transaction(db: AsyncSession, user_id: uuid.UUID, amount_ngn: float, tx_type: str, flutterwave_ref: Optional[str] = None) -> Transaction:
+async def create_transaction(db: AsyncSession, user_id: uuid.UUID, amount_ngn: float, tx_type: str, flutterwave_ref: Optional[str] = None, stripe_payment_intent_id: Optional[str] = None, status: str = "pending") -> Transaction:
     tx = Transaction(
         user_id=user_id,
         amount_ngn=amount_ngn,
         type=tx_type,
-        status="pending",
-        flutterwave_ref=flutterwave_ref
+        status=status,
+        flutterwave_ref=flutterwave_ref,
+        stripe_payment_intent_id=stripe_payment_intent_id
     )
     db.add(tx)
     await db.commit()
@@ -271,6 +294,13 @@ async def get_revenue_since(db: AsyncSession, since: datetime) -> float:
         )
     )
     return float(result.scalar() or 0)
+
+
+async def get_transactions_for_user(db: AsyncSession, user_id: uuid.UUID) -> List[Transaction]:
+    result = await db.execute(
+        select(Transaction).where(Transaction.user_id == user_id).order_by(Transaction.created_at.desc())
+    )
+    return result.scalars().all()
 
 
 # ------------------ SMS Logs ------------------

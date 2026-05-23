@@ -17,7 +17,9 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    telegram_id = Column(String, unique=True, nullable=False, index=True)
+    telegram_id = Column(String, unique=True, nullable=True, index=True)
+    supabase_id = Column(String, unique=True, nullable=True, index=True)
+    email = Column(String, unique=True, nullable=True, index=True)
     username = Column(String, nullable=True)
     joined_at = Column(DateTime, default=datetime.utcnow)
     is_banned = Column(Boolean, default=False)
@@ -80,6 +82,7 @@ class Transaction(Base):
     type = Column(String, nullable=False)
     status = Column(String, default="pending")
     flutterwave_ref = Column(String, nullable=True)
+    stripe_payment_intent_id = Column(String, nullable=True, index=True)
     metadata_json = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

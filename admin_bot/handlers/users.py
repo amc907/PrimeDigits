@@ -6,7 +6,6 @@ from sqlalchemy.exc import IntegrityError
 
 from database.connection import AsyncSessionLocal
 from database import crud
-from providers.twilio_provider import TwilioProvider
 from providers.telnyx_provider import TelnyxProvider
 
 router = Router()
@@ -103,16 +102,16 @@ async def cmd_replace(message: Message):
 
         # Release old
         if number.number_sid and not number.number_sid.startswith("MOCK_"):
-            twilio = TwilioProvider()
-            await twilio.release_number(number.number_sid)
+            if number.provider == "telnyx":
+                old_provider = TelnyxProvider()
+            else:
+                from providers.twilio_provider import TwilioProvider
+                old_provider = TwilioProvider()
+            await old_provider.release_number(number.number_sid)
 
-        # Get new
-        if country == "uk":
-            provider = TelnyxProvider()
-            provider_name = "telnyx"
-        else:
-            provider = TwilioProvider()
-            provider_name = "twilio"
+        # Get new (Telnyx for all countries)
+        provider = TelnyxProvider()
+        provider_name = "telnyx"
 
         numbers = await provider.search_numbers(country)
         if not numbers:

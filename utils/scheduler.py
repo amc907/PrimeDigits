@@ -9,6 +9,7 @@ from database.connection import AsyncSessionLocal
 from database import crud
 from utils.notifications import notify_user, notify_admins
 from providers.twilio_provider import TwilioProvider
+from providers.telnyx_provider import TelnyxProvider
 
 logger = logging.getLogger(__name__)
 
@@ -55,12 +56,16 @@ async def check_expiry_warnings():
 
 async def check_release_expired_numbers():
     twilio = TwilioProvider()
+    telnyx = TelnyxProvider()
     async with AsyncSessionLocal() as db:
         numbers = await crud.get_expired_numbers(db)
         for number in numbers:
             if number.expires_at and (datetime.utcnow() - number.expires_at).total_seconds() > 86400:
                 if not number.number_sid or not number.number_sid.startswith("MOCK_"):
-                    await twilio.release_number(number.number_sid)
+                    if number.provider == "telnyx":
+                        await telnyx.release_number(number.number_sid)
+                    else:
+                        await twilio.release_number(number.number_sid)
                 await crud.release_number(db, number.id)
                 if number.user:
                     await notify_user(

@@ -17,7 +17,6 @@ def country_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🇺🇸 United States", callback_data="country_us")],
         [InlineKeyboardButton(text="🇨🇦 Canada", callback_data="country_ca")],
-        [InlineKeyboardButton(text="🇬🇧 United Kingdom", callback_data="country_uk")],
         [InlineKeyboardButton(text="🔙 Back", callback_data="menu_back")],
     ])
 
@@ -26,7 +25,6 @@ def duration_menu(country: str) -> InlineKeyboardMarkup:
     prices = {
         "us": {1: 3000, 3: 8000, 6: 14000, 12: 25000},
         "ca": {1: 3000, 3: 8000, 6: 14000, 12: 25000},
-        "uk": {1: 4500, 3: 12000, 6: 20000, 12: 35000},
     }
     p = prices.get(country, prices["us"])
     return InlineKeyboardMarkup(inline_keyboard=[

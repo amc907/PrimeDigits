@@ -13,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.connection import get_db
 from database import crud
-from providers.twilio_provider import TwilioProvider
 from providers.telnyx_provider import TelnyxProvider
 
 logger = logging.getLogger(__name__)
@@ -34,7 +33,7 @@ stripe.api_key = STRIPE_SECRET_KEY
 class CreateIntentRequest(BaseModel):
     amount: int = Field(..., gt=0, description="Amount in cents (e.g. 399 for $3.99)")
     currency: str = Field(default="usd")
-    country: str = Field(..., description="Country code: us, ca, uk")
+    country: str = Field(..., description="Country code: us, ca")
     duration_months: int = Field(default=1, ge=1, le=12)
     user_email: str
     item_type: str = Field(default="number", description="'number' or 'credits'")
@@ -64,26 +63,15 @@ async def _stripe_call(func, *args, **kwargs):
 
 async def _find_and_purchase_number(country: str) -> tuple[Optional[dict], Optional[str]]:
     """
-    Search for and purchase a number.
+    Search for and purchase a number via Telnyx.
     Returns (purchase_result_dict, provider_name) or (None, None) on failure.
     """
-    twilio = TwilioProvider()
     telnyx = TelnyxProvider()
-    c = country.lower()
 
-    # Twilio for US/CA
-    if c in ("us", "ca"):
-        numbers = await twilio.search_numbers(country)
-        if numbers:
-            result = await twilio.purchase_number(numbers[0]["phone_number"])
-            if result.get("status") in ("active", "mock"):
-                return result, "twilio"
-
-    # Telnyx for UK (and fallback for everyone)
     numbers = await telnyx.search_numbers(country)
     if numbers:
         result = await telnyx.purchase_number(numbers[0]["phone_number"])
-        if result.get("status") in ("active", "mock"):
+        if result.get("status") in ("active", "mock", "pending"):
             return result, "telnyx"
 
     return None, None
@@ -92,9 +80,7 @@ async def _find_and_purchase_number(country: str) -> tuple[Optional[dict], Optio
 async def _configure_webhook(provider: str, number_sid: str) -> bool:
     if not WEBHOOK_BASE_URL:
         return True
-    webhook_url = f"{WEBHOOK_BASE_URL}/webhooks/twilio" if provider == "twilio" else f"{WEBHOOK_BASE_URL}/webhooks/telnyx"
-    if provider == "twilio":
-        return await TwilioProvider().configure_webhook(number_sid, webhook_url)
+    webhook_url = f"{WEBHOOK_BASE_URL}/webhooks/telnyx"
     return await TelnyxProvider().configure_webhook(number_sid, webhook_url)
 
 
@@ -237,7 +223,7 @@ async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)):
 
     # Configure webhook for the number
     if purchase_result.get("sid"):
-        await _configure_webhook(provider or "twilio", purchase_result["sid"])
+        await _configure_webhook(provider or "telnyx", purchase_result["sid"])
 
     # Create initial 15 SMS credits
     await crud.get_or_create_sms_credit(db, user_id=user.id, number_id=number.id, initial=15)

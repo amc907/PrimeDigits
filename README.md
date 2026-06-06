@@ -4,10 +4,10 @@ PrimeDigits is a complete virtual phone number reseller system built for Nigeria
 
 ## Features
 
-- **Customer Bot**: Buy US/Canada/UK numbers, manage SMS credits, view history, referrals
+- **Customer Bot**: Buy US/Canada numbers, manage SMS credits, view history, referrals
 - **Admin Bot**: Dashboard, user management, broadcast, support agents
 - **Payments**: Flutterwave integration (mocked for development)
-- **Providers**: Twilio (US/Canada), Telnyx mock (UK)
+- **Providers**: Telnyx (US/Canada)
 - **Scheduling**: Automatic expiry warnings and number release
 
 ## Tech Stack

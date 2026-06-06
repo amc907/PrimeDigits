@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database.connection import AsyncSessionLocal
 from database import crud
 from customer_bot.keyboards.menus import country_menu, duration_menu, confirm_payment_menu, main_menu
-from providers.twilio_provider import TwilioProvider
 from providers.telnyx_provider import TelnyxProvider
 
 router = Router()
@@ -18,7 +17,6 @@ WEBHOOK_BASE_URL = os.getenv("WEBHOOK_BASE_URL", "")
 PRICING = {
     "us": {1: 3000, 3: 8000, 6: 14000, 12: 25000},
     "ca": {1: 3000, 3: 8000, 6: 14000, 12: 25000},
-    "uk": {1: 4500, 3: 12000, 6: 20000, 12: 35000},
 }
 
 
@@ -36,7 +34,7 @@ async def menu_buy(callback: CallbackQuery):
 async def choose_country(callback: CallbackQuery):
     country = callback.data.split("_")[1]
     await callback.message.edit_text(
-        f"⏳ Choose subscription duration for your {'🇺🇸 US' if country=='us' else '🇨🇦 Canada' if country=='ca' else '🇬🇧 UK'} number:",
+        f"⏳ Choose subscription duration for your {'🇺🇸 US' if country=='us' else '🇨🇦 Canada'} number:",
         reply_markup=duration_menu(country),
         parse_mode="HTML"
     )
@@ -51,7 +49,7 @@ async def choose_duration(callback: CallbackQuery):
     price = PRICING.get(country, PRICING["us"])[months]
     text = (
         f"📋 <b>Order Summary</b>\n\n"
-        f"🌍 Country: {'🇺🇸 US' if country=='us' else '🇨🇦 Canada' if country=='ca' else '🇬🇧 UK'}\n"
+        f"🌍 Country: {'🇺🇸 US' if country=='us' else '🇨🇦 Canada'}\n"
         f"⏳ Duration: {months} month{'s' if months>1 else ''}\n"
         f"💰 Price: ₦{price:,}\n"
         f"📩 SMS Credits: 15 included\n\n"
@@ -94,27 +92,10 @@ async def process_payment(callback: CallbackQuery):
         tx = await crud.create_transaction(db, user.id, float(price), f"number_{country}_{months}", flutterwave_ref=f"MOCK_{uuid.uuid4().hex[:12]}")
         await crud.update_transaction_status(db, tx.id, "completed")
 
-        # Purchase number
-        if country == "uk":
-            provider = TelnyxProvider()
-            provider_name = "telnyx"
-            numbers = await provider.search_numbers(country)
-        else:
-            # Try Twilio first for US/Canada
-            provider = TwilioProvider()
-            provider_name = "twilio"
-            numbers = await provider.search_numbers(country)
-            # Fallback to Telnyx if Twilio unavailable
-            if not numbers:
-                logger.info(
-                    "Twilio unavailable, "
-                    "falling back to Telnyx"
-                )
-                provider = TelnyxProvider()
-                provider_name = "telnyx"
-                numbers = await provider.search_numbers(
-                    country
-                )
+        # Purchase number (Telnyx for all countries)
+        provider = TelnyxProvider()
+        provider_name = "telnyx"
+        numbers = await provider.search_numbers(country)
 
         if not numbers:
             await callback.message.edit_text(
@@ -129,11 +110,7 @@ async def process_payment(callback: CallbackQuery):
         result = await provider.purchase_number(chosen["phone_number"])
 
         # Configure webhook
-        webhook_url = (
-            f"{WEBHOOK_BASE_URL}/webhooks/telnyx/sms"
-            if country == "uk"
-            else f"{WEBHOOK_BASE_URL}/webhooks/twilio/sms"
-        )
+        webhook_url = f"{WEBHOOK_BASE_URL}/webhooks/telnyx/sms"
         if WEBHOOK_BASE_URL and not result["sid"].startswith("MOCK_"):
             await provider.configure_webhook(result["sid"], webhook_url)
 

@@ -17,7 +17,7 @@ WELCOME_TEXT = (
     "👋 <b>Welcome to PrimeDigits!</b>\n\n"
     "Your trusted virtual phone number partner for developers and freelancers worldwide.\n\n"
     "🚀 <b>Why PrimeDigits?</b>\n"
-    "• Get USA 🇺🇸, Canada 🇨🇦 & UK 🇬🇧 numbers instantly\n"
+    "• Get USA 🇺🇸 & Canada 🇨🇦 numbers instantly\n"
     "• Other platforms charge ₦800–₦1,500 per <u>single</u> verification code\n"
     "• PrimeDigits gives you <b>15 FREE SMS credits</b> with every number — use them for multiple verifications!\n"
     "• Top up SMS credits anytime at unbeatable rates\n"
@@ -196,7 +196,7 @@ async def cmd_howto(message: Message):
     text = (
         "📖 <b>How PrimeDigits Works</b>\n\n"
         "📱 <b>STEP 1 — Buy a Number</b>\n"
-        "• Choose country (US 🇺🇸, UK 🇬🇧, CA 🇨🇦)\n""• Select duration & pay\n"
+        "• Choose country (US 🇺🇸, CA 🇨🇦)\n""• Select duration & pay\n"
         "• Get number instantly with 15 FREE SMS\n\n"
         "💳 <b>STEP 2 — SMS Credits</b>\n"
         "• 1 code = 1 credit\n"
@@ -261,7 +261,7 @@ async def menu_howto(callback: CallbackQuery):
     text = (
         "📖 <b>How PrimeDigits Works</b>\n\n"
         "📱 <b>STEP 1 — Buy a Number</b>\n"
-        "• Choose your country (US 🇺🇸, UK 🇬🇧, "
+        "• Choose your country (US 🇺🇸, "
         "Canada 🇨🇦)\n"
         "• Select subscription duration\n"
         "• Pay and receive your number instantly\n"

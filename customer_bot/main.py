@@ -4,6 +4,7 @@ import asyncio
 from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
+from aiogram.fsm.storage.memory import MemoryStorage
 
 from customer_bot.handlers import start, buy_number, credits, my_numbers, support
 
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 CUSTOMER_BOT_TOKEN = os.getenv("CUSTOMER_BOT_TOKEN", "")
 
 bot = Bot(token=CUSTOMER_BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-dp = Dispatcher()
+dp = Dispatcher(storage=MemoryStorage())
 
 # Register routers
 dp.include_router(start.router)
@@ -30,4 +31,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-

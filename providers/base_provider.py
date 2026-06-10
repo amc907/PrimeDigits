@@ -4,7 +4,7 @@ from typing import Optional
 
 class BaseProvider(ABC):
     @abstractmethod
-    async def search_numbers(self, country: str) -> list:
+    async def search_numbers(self, country: str, state: Optional[str] = None) -> list:
         """Return list of available phone numbers."""
         pass
 

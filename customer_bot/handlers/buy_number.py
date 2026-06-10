@@ -2,12 +2,15 @@ import uuid
 import os
 import logging
 from aiogram import Router, F
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, Message
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.connection import AsyncSessionLocal
 from database import crud
 from customer_bot.keyboards.menus import country_menu, duration_menu, confirm_payment_menu, main_menu
+from customer_bot.utils.us_states import normalize_state
 from providers.telnyx_provider import TelnyxProvider
 
 router = Router()
@@ -18,6 +21,10 @@ PRICING = {
     "us": {1: 3000, 3: 8000, 6: 14000, 12: 25000},
     "ca": {1: 3000, 3: 8000, 6: 14000, 12: 25000},
 }
+
+
+class BuyNumberFlow(StatesGroup):
+    choosing_state = State()
 
 
 @router.callback_query(F.data == "menu_buy")
@@ -31,26 +38,63 @@ async def menu_buy(callback: CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("country_"))
-async def choose_country(callback: CallbackQuery):
+async def choose_country(callback: CallbackQuery, state: FSMContext):
     country = callback.data.split("_")[1]
-    await callback.message.edit_text(
-        f"⏳ Choose subscription duration for your {'🇺🇸 US' if country=='us' else '🇨🇦 Canada'} number:",
-        reply_markup=duration_menu(country),
-        parse_mode="HTML"
-    )
+    if country.lower() == "us":
+        await state.set_state(BuyNumberFlow.choosing_state)
+        await callback.message.edit_text(
+            "📍 Which US state do you want your number from?\n"
+            "Type the state name or abbreviation (e.g. California or CA)",
+            parse_mode="HTML"
+        )
+    else:
+        await state.clear()
+        await callback.message.edit_text(
+            f"⏳ Choose subscription duration for your 🇨🇦 Canada number:",
+            reply_markup=duration_menu(country),
+            parse_mode="HTML"
+        )
     await callback.answer()
 
 
+@router.message(BuyNumberFlow.choosing_state)
+async def process_state_input(message: Message, state: FSMContext):
+    raw_input = message.text or ""
+    state_code = normalize_state(raw_input)
+
+    if not state_code:
+        await message.answer(
+            "❌ State not recognized. Please try again (e.g. Texas or TX)",
+            parse_mode="HTML"
+        )
+        return
+
+    await state.update_data(us_state=state_code)
+    await message.answer(
+        f"⏳ Choose subscription duration for your 🇺🇸 US number:",
+        reply_markup=duration_menu("us"),
+        parse_mode="HTML"
+    )
+
+
 @router.callback_query(F.data.startswith("dur_"))
-async def choose_duration(callback: CallbackQuery):
+async def choose_duration(callback: CallbackQuery, state: FSMContext):
     parts = callback.data.split("_", 2)
     _, country, months = parts
     months = int(months)
     price = PRICING.get(country, PRICING["us"])[months]
+
+    data = await state.get_data()
+    us_state = data.get("us_state")
+
+    country_label = "🇺🇸 US" if country == "us" else "🇨🇦 Canada"
+    state_line = f"📍 State: {us_state}\n" if country == "us" and us_state else ""
+
     text = (
         f"📋 <b>Order Summary</b>\n\n"
-        f"🌍 Country: {'🇺🇸 US' if country=='us' else '🇨🇦 Canada'}\n"
-        f"⏳ Duration: {months} month{'s' if months>1 else ''}\n"
+        f"🌍 Country: {country_label}\n"
+        f"{state_line}"
+        f"⏳ Duration: {months} month{'s' if months > 1 else ''}\n"
         f"💰 Price: ₦{price:,}\n"
         f"📩 SMS Credits: 15 included\n\n"
         f"Proceed to payment?"
@@ -64,11 +108,14 @@ async def choose_duration(callback: CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("pay_"))
-async def process_payment(callback: CallbackQuery):
+async def process_payment(callback: CallbackQuery, state: FSMContext):
     parts = callback.data.split("_", 3)
     _, country, months, price = parts
     months = int(months)
     price = int(price)
+
+    data = await state.get_data()
+    us_state = data.get("us_state") if country.lower() == "us" else None
 
     async with AsyncSessionLocal() as db:
         user = await crud.get_user_by_telegram_id(db, str(callback.from_user.id))
@@ -86,6 +133,7 @@ async def process_payment(callback: CallbackQuery):
                 parse_mode="HTML"
             )
             await callback.answer()
+            await state.clear()
             return
 
         # Mock Flutterwave payment
@@ -95,15 +143,17 @@ async def process_payment(callback: CallbackQuery):
         # Purchase number (Telnyx for all countries)
         provider = TelnyxProvider()
         provider_name = "telnyx"
-        numbers = await provider.search_numbers(country)
+        numbers = await provider.search_numbers(country, state=us_state)
 
         if not numbers:
+            state_msg = f" in {us_state}" if us_state else ""
             await callback.message.edit_text(
-                "❌ No numbers available right now. Please try again later or contact support.",
+                f"⚠️ No numbers available{state_msg} right now. Please try another state.",
                 reply_markup=main_menu(),
                 parse_mode="HTML"
             )
             await callback.answer()
+            await state.clear()
             return
 
         chosen = numbers[0]
@@ -117,14 +167,17 @@ async def process_payment(callback: CallbackQuery):
         number = await crud.create_number(
             db, user.id, result["phone_number"], result["sid"],
             provider_name,
-            country.upper(), months
+            country.upper(), months,
+            state=us_state
         )
         await crud.get_or_create_sms_credit(db, user.id, number.id, initial=15)
 
+        state_line = f"📍 <b>State:</b> {us_state}\n" if us_state else ""
         await callback.message.edit_text(
             f"🎉 <b>Payment Successful!</b>\n\n"
             f"📱 <b>Your Number:</b> <code>{result['phone_number']}</code>\n"
             f"🌍 <b>Country:</b> {country.upper()}\n"
+            f"{state_line}"
             f"⏳ <b>Expires:</b> {number.expires_at.strftime('%Y-%m-%d')}\n"
             f"💳 <b>SMS Credits:</b> 15\n\n"
             f"Use this number for verifications. You will receive SMS directly here!",
@@ -132,3 +185,4 @@ async def process_payment(callback: CallbackQuery):
             parse_mode="HTML"
         )
         await callback.answer()
+        await state.clear()

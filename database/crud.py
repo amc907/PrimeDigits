@@ -100,7 +100,7 @@ async def set_user_number_limit(db: AsyncSession, user_id: uuid.UUID, limit: int
 
 # ------------------ Numbers ------------------
 
-async def create_number(db: AsyncSession, user_id: uuid.UUID, phone_number: str, number_sid: str, provider: str, country: str, duration_months: int) -> Number:
+async def create_number(db: AsyncSession, user_id: uuid.UUID, phone_number: str, number_sid: str, provider: str, country: str, duration_months: int, state: Optional[str] = None) -> Number:
     expires = datetime.utcnow() + timedelta(days=30 * duration_months)
     number = Number(
         user_id=user_id,
@@ -108,6 +108,7 @@ async def create_number(db: AsyncSession, user_id: uuid.UUID, phone_number: str,
         number_sid=number_sid,
         provider=provider,
         country=country,
+        state=state,
         expires_at=expires,
         is_active=True
     )

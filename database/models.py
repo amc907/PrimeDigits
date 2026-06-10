@@ -40,6 +40,7 @@ class Number(Base):
     number_sid = Column(String, nullable=True)
     provider = Column(String, nullable=False)
     country = Column(String, nullable=False)
+    state = Column(String, nullable=True)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     purchased_at = Column(DateTime, default=datetime.utcnow)
     expires_at = Column(DateTime, nullable=False)

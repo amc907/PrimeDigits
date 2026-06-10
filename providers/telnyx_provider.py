@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 TELNYX_API_KEY = os.getenv("TELNYX_API_KEY", "")
 TELNYX_MESSAGING_PROFILE_ID = os.getenv(
-    "TELNYX_MESSAGING_PROFILE_ID", "40019e4f"
+    "TELNYX_MESSAGING_PROFILE_ID", "40019e4f-8160-4f99-b885-a3074f360bd5"
 )
 TELNYX_BASE_URL = "https://api.telnyx.com/v2"
 
@@ -32,14 +32,14 @@ class TelnyxProvider(BaseProvider):
             )
         return self._client
 
-    async def search_numbers(self, country: str) -> list:
+    async def search_numbers(self, country: str, state: Optional[str] = None) -> list:
         logger.info(
             f"Telnyx search called. "
             f"API key set: {bool(TELNYX_API_KEY)}, "
-            f"Country: {country}"
+            f"Country: {country}, State: {state}"
         )
         if not self.available:
-            return self._mock_numbers(country)
+            return self._mock_numbers(country, state)
 
         country_code = "US" if country.lower() == "us" else "CA"
         client = await self._get_client()
@@ -57,6 +57,9 @@ class TelnyxProvider(BaseProvider):
                     "filter[features]": "sms",
                     "filter[limit]": "5",
                 }
+                if country_code == "US" and state:
+                    params["filter[administrative_area]"] = state.upper()
+
                 response = await client.get(
                     "/available_phone_numbers", params=params
                 )
@@ -84,9 +87,10 @@ class TelnyxProvider(BaseProvider):
                     f"{type(e).__name__}: {e}"
                 )
 
-        return self._mock_numbers(country)
+        # Only return mock numbers when Telnyx is not configured.
+        return self._mock_numbers(country, state) if not self.available else []
 
-    def _mock_numbers(self, country: str) -> list:
+    def _mock_numbers(self, country: str, state: Optional[str] = None) -> list:
         mock = {
             "us": "+12025550100",
             "ca": "+16135550100",

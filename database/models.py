@@ -91,6 +91,26 @@ class Transaction(Base):
     user = relationship("User", back_populates="transactions")
 
 
+class BachsCheckout(Base):
+    """One row per Bachs hosted checkout session; status guards against fulfilling a payment twice."""
+    __tablename__ = "bachs_checkouts"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    checkout_id = Column(String, unique=True, nullable=True, index=True)
+    user_email = Column(String, nullable=False, index=True)
+    purpose = Column(String, nullable=False)  # "number" or "credits"
+    amount = Column(Numeric(12, 2), nullable=False)
+    currency = Column(String, nullable=False, default="USD")
+    country = Column(String, nullable=True)
+    duration_months = Column(Integer, nullable=True)
+    number_id = Column(UUID(as_uuid=True), nullable=True)
+    sms_credits = Column(Integer, nullable=True)
+    metadata_json = Column(Text, nullable=True)
+    status = Column(String, nullable=False, default="pending")  # pending | processing | fulfilled
+    created_at = Column(DateTime, default=datetime.utcnow)
+    fulfilled_at = Column(DateTime, nullable=True)
+
+
 class SmsLog(Base):
     __tablename__ = "sms_logs"
 

@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.responses import PlainTextResponse
 
 from api.webhooks import twilio, telnyx, flutterwave
-from api.routes import admin, stripe_payments
+from api.routes import admin, web, bachs_payments
 from database.connection import engine, Base
 from utils.scheduler import start_scheduler
 
@@ -47,7 +47,8 @@ app.include_router(twilio.router)
 app.include_router(telnyx.router)
 app.include_router(flutterwave.router)
 app.include_router(admin.router)
-app.include_router(stripe_payments.router)
+app.include_router(web.router)
+app.include_router(bachs_payments.router)
 
 
 @app.get("/health")
